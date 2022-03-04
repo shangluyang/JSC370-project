@@ -1,0 +1,189 @@
+---
+title: "Bike-share analysis"
+author: "Luyang Shang"
+date: "2/27/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# Introduction
+Bike sharing system is a shared transport service in which bicycles are made available for shared use to individuals, recently bike-sharing companies have become one of the hottest tech companies in the world especially in china, there are over 500 bike-sharing programs around the world. 
+
+The data about bike sharing is generated from a bike-sharing app in the Washington D.C, these apps generate a large amount of data on a daily basis and are important for studying the customer travel demand and their local road system. It includes following information:
+
+- datetime - hourly date + timestamp
+- season - 1 = spring, 2 = summer, 3 = fall, 4 = winter
+- holiday - whether the day is considered a holiday
+- workingday - whether the day is neither a weekend nor holiday
+- weather
+
+  1: Clear, Few clouds, Partly cloudy, Partly cloudy
+  
+  2: Mist + Cloudy, Mist + Broken clouds, Mist + Few clouds, Mist
+  
+  3: Light Snow, Light Rain + Thunderstorm + Scattered clouds, Light Rain + Scattered clouds
+  
+  4: Heavy Rain + Ice Pallets + Thunderstorm + Mist, Snow + Fog
+- temp - temperature in Celsius
+- atemp - temperature in Celsius
+- humidity - relative humidity
+- windspeed - wind speed
+- casual - number of non-registered user rentals initiated
+- registered - number of registered user rentals initiated
+- count - number of total rentals
+
+```{r, echo=FALSE}
+library(tidyverse)
+library(dplyr)
+library(qwraps2)
+library(ggplot2)
+bike <- read.csv('bikeshare.csv')
+```
+I will make a deep analysis on bike sharing data to investigate which factors contribute to bike rental demand.
+
+```{r}
+head(bike)
+```
+# Methods
+The data is retrieved from Kaggle, a famous data competition platform. You could observe the data from the following url: https://www.kaggle.com/c/bike-sharing-demand/data. Each row records relevant information within a 1 hour period. The data is pretty clear, it does not contain any missing value. To make the visualization more readable, I change the season column and weather column.  
+
+```{r, include=FALSE}
+colSums(is.na(bike))
+```
+
+To make the visualization more readable, I change the season column and weather column.  Meanwhile, to analyze customer riding time pattern, I extract month, day and hour from variable datetime.
+```{r}
+bike$season <- recode(bike$season, '1'='spring', '2'='summer', '3'='fall', '4'='winter')
+bike$weather <- recode(bike$weather, '1'='clear', '2'='cloudy', '3'='drizzle', '4'='rainstorm')
+bike$datetime <- as.POSIXct(bike$datetime, format="%Y-%m-%d %H:%M:%S", tz="UTC")
+bike$month <- months(bike$datetime)
+bike$weekday <- weekdays(bike$datetime)
+bike$hour <- format(bike$datetime, format = "%H")
+bike$day <- format(bike$datetime, format = "%d")
+```
+
+I will use a R built-in package called ggplot to make visualization, and build a linear regression model to explore the relationship between multiple variable and customer rental demands
+
+# Preliminary
+
+Let's start to explore which factors contribute to bicycle rental demands. The following plot shows summary statistics for the number of total rentals in each hour period. We could observe that on average 191.6 people rent a bike each hour.  However, the maximum number of customers for each hour is 977, while the minimum is only 1. This suggests time might be a factor contributing to the amount of rentals.
+
+```{r, echo=FALSE}
+count_summary <- bike %>% 
+  select(count) %>% 
+  summarise(mean = mean(count),
+            median = median(count),
+            min = min(count),
+            max = max(count))
+
+knitr::kable(round(count_summary, 1), caption = "Number of total rentals")
+```
+
+```{r}
+
+```
+
+The following bar plot shows the distribution of the number of rentals for each hour. There is a huge fluctuation among the number of riders per day, ranging from less than 5000 to more than 200000. It is clear that most customers rent bicycles during day time, meanwhile, There are two peaks each day on commuting hours.
+
+```{r, echo=FALSE}
+ggplot(data = bike) +
+  geom_bar(mapping = aes(x=count, y=hour), stat="identity") +
+  ggtitle("Distribution of number of rentals for each hour") +
+  xlab("count") +
+  ylab('hour')
+```
+In terms of the month dimension, the demand for orders appears in an annual cycle: the demand for bikes starts to rise in the spring of each year, reaches and remains at a peak level in the summer and fall, and then starts to fall back in the winter, which suggests the daily temperature and weather could be potential factors contributing to demand for rental.
+
+```{r, echo=FALSE}
+bike$month <- factor(bike$month, levels=unique(bike$month))
+
+ggplot(data = bike) +
+  geom_bar(mapping = aes(x=count, y=month), stat="identity") +
+  ggtitle("Distribution of number of rentals for each month") +
+  xlab("count") +
+  ylab('month')
+```
+The following plot shows the distribution of the number of rentals for each weekday. Surprisingly, there is little fluctuation among weekdays, which indicates most customers not only use the bicycle for transportation to work, but also rent bicycles for daily commuting.
+
+```{r, echo=FALSE}
+bike$weekday <- factor(bike$weekday, levels=c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'))
+
+ggplot(data = bike) +
+  geom_bar(mapping = aes(x=count, y=weekday), stat="identity") +
+  ggtitle("Distribution of number of rentals for each weekday") +
+  xlab("count") +
+  ylab('weekday')
+```
+Previous analysis suggests temperature and weather could be a potential factor for bicycles rental demands, the following plot shows a strong linear relationship between number of rental bicycles and temperature, as the temperature increases, the demands for bicycles rentals increases, but when temperatures is above 36 degrees, the situation changes a bit. The trend begins to move in the opposite direction.
+
+```{r, echo=FALSE}
+bike %>% 
+  group_by(temp) %>% 
+  summarise(avg_bike = mean(count)) %>% 
+  ggplot(mapping=aes(x = temp, y=avg_bike)) + 
+  geom_line() + 
+  ggtitle("Average hourly rental bicycles for temperature") +
+  xlab("temperature") + 
+  ylab("Average rental bicycles")
+```
+The following plot verify my previous assumption that from spring to autumn, the order volume is in a growing trend, and starts to fall after reaching the peak in autumn, and reaches a low point in spring.
+
+```{r, echo=FALSE}
+ggplot(data = bike) +
+  geom_bar(mapping = aes(x=season, y=count), stat="identity") +
+  ggtitle("Distribution of number of rentals for each season") +
+  xlab("season") +
+  ylab('count')
+```
+The following bar plot shows distribution of Average rental bicycles for each weather, the plot indicates the demand for renting bicycles is highest when weather is clear, however lots of people choose to rent bicycles during rainstorm, we need to analyse the data further to find reason for that
+
+```{r, echo=FALSE}
+bike %>% 
+  group_by(weather) %>% 
+  summarise(avg_rent = mean(count)) %>% 
+  ggplot() +
+  geom_bar(mapping = aes(x=weather, y=avg_rent), stat="identity") +
+  ggtitle("Distribution of Average rental bicycles for each weather") +
+  xlab("weather") +
+  ylab('Average rental bicycles')
+```
+Considering the low probability of extreme weather, it is very likely that the demand is not representative of the real demand in rainstorm. Combining our common sense with other available data, we can assume that the worse the weather, the lower the demand for bicycles.
+
+```{r, echo=FALSE}
+weather_count <- bike %>% 
+  count(weather)
+
+knitr::kable(weather_count, caption="Weather Distribution")
+```
+
+The following plot suggests humidity is one of factors influencing bicycle rental demand, however it is possible that humidity has a strong correlation with weather. However, higher humidity indicates a higher possibility of raining, so humidity could be a confounding variable.
+
+```{r}
+bike %>% 
+  group_by(humidity) %>% 
+  summarise(avg_bike = mean(count)) %>% 
+  ggplot(mapping=aes(x = humidity, y=avg_bike)) + 
+  geom_line() + 
+  ggtitle("Average hourly rental bicycles for humidity") +
+  xlab("humidity") + 
+  ylab("Average rental bicycles")
+```
+```{r}
+humidity_data <- bike %>% 
+  group_by(weather) %>% 
+  summarise(humidity_mean = mean(humidity))
+
+knitr::kable(humidity_data, caption="Mean humidity for each weather")
+```
+Then I build a linear regression by considering temperature, hour, season and weather, the p value for each variable is less than the significance level (0.05), indicating all those variables are statistically significant. Meanwhile, the r-square for this model is 0.6252, indicating the model has a relatively good performance
+
+```{r, echo=FALSE}
+library(mgcv)
+lm_mod <- lm(count ~ temp +  as.factor(hour) + as.factor(season) + as.factor(weather), data = bike)
+summary(lm_mod)
+```
+
+# Conclusion
+
+This data analysis aim to find the factors contribute to number of bicycle rental. We find both temperature, season, time and weather are key factors influencing bicycle rental demand. We found customer tent to rent bike when temperature is relatively high, but they avoid extremely hot weather. Meanwhile, bicycle use on weekdays is concentrated between 7-10 a.m. and 18-20 p.m., coinciding with traffic rush hour. For season, we found the demand for bikes starts to rise in the spring of each year, reaches and remains at a peak level in the summer and fall, and then starts to fall back in the winter, this founding coincide with the founding for temperature. For the weather, most customer avoid using bike in raining day, and they tend to ride bike when weather is clear.
